@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lit Up - Literature Card Game</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script defer src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <!-- Flying card overlay — fixed, full-viewport, pointer-events:none -->
+    <div id="card-flight-layer"></div>
+
+    <div id="bg-cards" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <div>
+        <h1>Lit Up</h1>
+        <p class="subtitle">Play Literature with friends.</p>
+      </div>
+      <div class="header-actions">
+        <button id="toggle-rules" class="ghost-button" type="button">Rules</button>
+        <span id="connection-status" class="status-pill">Offline</span>
+      </div>
+    </header>
+
+    <main>
+      <section id="message-bar" class="message-bar hidden"></section>
+
+      <!-- ── Landing ───────────────────────────────────── -->
+      <section id="landing" class="view active">
+        <div class="panel">
+          <h2>Create a room</h2>
+          <label class="field">
+            <span>Name</span>
+            <input id="host-name" type="text" placeholder="Your name" maxlength="20" autocomplete="off" />
+          </label>
+          <div class="field">
+            <span>Avatar color</span>
+            <div id="host-avatar-picker" class="avatar-picker"></div>
+          </div>
+          <button id="create-room" class="primary-button" type="button">Create room</button>
+        </div>
+
+        <div class="panel">
+          <h2>Join a room</h2>
+          <label class="field">
+            <span>Name</span>
+            <input id="join-name" type="text" placeholder="Your name" maxlength="20" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span>Room code</span>
+            <input id="join-code" type="text" placeholder="ABC123" maxlength="12" autocomplete="off" />
+          </label>
+          <div class="field">
+            <span>Avatar color</span>
+            <div id="join-avatar-picker" class="avatar-picker"></div>
+          </div>
+          <button id="join-room" class="primary-button" type="button">Join room</button>
+        </div>
+
+        <div class="panel">
+          <h2>How it works</h2>
+          <ol class="steps">
+            <li>Create a private room and share the code.</li>
+            <li>Play with 4–10 players in two teams.</li>
+            <li>Ask opponents for cards and declare sets to score.</li>
+            <li>First team to 5 sets wins!</li>
+          </ol>
+          <p class="muted">Rules from <a href="https://www.pagat.com/quartet/literature.html" target="_blank" rel="noreferrer">Pagat</a>.</p>
+        </div>
+      </section>
+
+      <!-- ── Lobby ─────────────────────────────────────── -->
+      <section id="lobby" class="view">
+        <div class="panel wide">
+          <div class="room-header">
+            <div>
+              <h2>Room <span id="room-code">----</span></h2>
+              <p class="muted">Share the invite link to invite friends.</p>
+            </div>
+            <div class="room-actions">
+              <button id="copy-invite" class="ghost-button" type="button">Copy invite</button>
+              <button id="leave-room" class="ghost-button" type="button">Leave room</button>
+            </div>
+          </div>
+          <div class="field">
+            <input id="invite-link" type="text" readonly />
+          </div>
+          <div class="field" style="margin-top:10px;">
+            <span>Transaction log entries</span>
+            <div class="log-count-picker">
+              <button type="button" class="log-count-btn active" data-count="3">3</button>
+              <button type="button" class="log-count-btn" data-count="5">5</button>
+              <button type="button" class="log-count-btn" data-count="0">All</button>
+            </div>
+          </div>
+          <div class="field" style="margin-top:10px;">
+            <span>Bot difficulty</span>
+            <div class="bot-diff-picker">
+              <button type="button" class="bot-diff-btn" data-diff="easy">Easy</button>
+              <button type="button" class="bot-diff-btn active" data-diff="medium">Medium</button>
+              <button type="button" class="bot-diff-btn" data-diff="hard">Hard</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel wide">
+          <div class="room-header">
+            <h3>Players</h3>
+            <div id="lobby-host-actions" class="room-actions hidden">
+              <button id="add-bot" class="ghost-button" type="button">Add bots</button>
+              <button id="remove-bots" class="ghost-button" type="button">Remove bots</button>
+              <button id="shuffle-teams" class="ghost-button" type="button">Shuffle teams</button>
+              <button id="start-game" class="primary-button" type="button">Start game</button>
+            </div>
+          </div>
+          <div id="lobby-players" class="player-grid"></div>
+          <p class="muted" style="margin-top:10px;font-size:.82rem;">Minimum 4 players, even count required.</p>
+        </div>
+      </section>
+
+      <!-- ── Game ──────────────────────────────────────── -->
+      <section id="game" class="view">
+
+        <!-- Top bar -->
+        <div id="game-topbar">
+          <div id="turn-indicator">
+            <span id="turn-dot" class="turn-dot"></span>
+            <span id="turn-label">Waiting...</span>
+          </div>
+          <div id="scoreboard"></div>
+          <div class="topbar-actions">
+            <button id="rules-shortcut" class="ghost-button" type="button">Rules</button>
+            <button id="leave-game" class="ghost-button" type="button">Leave</button>
+          </div>
+        </div>
+
+        <!-- Main content: table LEFT, actions RIGHT -->
+        <div id="game-main">
+
+          <!-- LEFT: Table arena -->
+          <div id="game-arena">
+            <div id="table-felt">
+              <div id="table-center">
+                <div id="claimed-sets-chips"></div>
+              </div>
+            </div>
+            <div id="game-players"></div>
+          </div>
+
+          <!-- RIGHT: Actions only (no hand here) -->
+          <div id="your-area">
+            <select id="ask-opponent" style="display:none"></select>
+            <select id="ask-card"     style="display:none"></select>
+
+            <!-- Ask -->
+            <div id="ask-ui" class="right-section">
+              <div class="rs-label">Ask for a card</div>
+              <div id="ask-hint" class="ask-hint">Click an opponent at the table to target them</div>
+              <div id="ask-card-choices" class="ask-card-choices"></div>
+              <button id="ask-button" class="primary-button" type="button" disabled>Ask</button>
+            </div>
+
+            <!-- Declare with assignment form -->
+            <div id="declare-ui" class="right-section">
+              <div class="rs-label">Declare a set</div>
+              <select id="declare-set"></select>
+              <div id="declare-assignments" class="declare-assignments"></div>
+              <button id="declare-button" class="primary-button gold" type="button">Declare</button>
+            </div>
+
+            <!-- Pass / reset -->
+            <div id="pass-ui" class="right-section">
+              <div class="rs-label">Pass turn</div>
+              <p class="muted" style="font-size:.8rem;margin:0;line-height:1.4;">
+                Pass to a teammate when you have no cards.
+              </p>
+              <button id="pass-button" class="ghost-button" type="button">Pass turn</button>
+              <button id="reset-game" class="ghost-button hidden" type="button">Play again</button>
+            </div>
+
+            <div id="last-action-bar">
+              <p id="last-action"></p>
+            </div>
+          </div>
+
+        </div><!-- #game-main -->
+
+        <!-- BOTTOM: Your hand spans full width -->
+        <div id="hand-strip">
+          <div id="hand-strip-label">
+            Your hand <span id="card-count-badge" class="card-count-badge">0</span>
+          </div>
+          <div id="hand-cards" class="hand-grid"></div>
+        </div>
+
+      </section>
+    </main>
+
+    <!-- Rules side panel -->
+    <aside id="rules-panel" class="rules-panel hidden">
+      <div class="rules-header">
+        <h3>Quick Rules</h3>
+        <button id="close-rules" class="ghost-button" type="button">Close</button>
+      </div>
+      <ul class="rules-list">
+        <li>Play with 4–10 players in two teams.</li>
+        <li>Ask an opponent for a card — you must hold one from the same set.</li>
+        <li>Got it? Keep your turn. Missed? Turn passes to them.</li>
+        <li>Declare a set when your team holds all 6 cards.</li>
+        <li>Wrong declaration? The other team scores.</li>
+        <li>First team to 5 sets wins.</li>
+      </ul>
+      <div>
+        <strong style="font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);">The 9 sets</strong>
+        <p class="muted" style="margin-top:6px;font-size:.84rem;line-height:1.6;">
+          Each suit: Low (2–7) and High (9–A). Plus one wild set: all four 8s and both Jokers.
+        </p>
+      </div>
+      <p class="muted" style="font-size:.8rem;">Full rules: <a href="https://www.pagat.com/quartet/literature.html" target="_blank" rel="noreferrer">Pagat</a></p>
+    </aside>
+
+    <div id="toast-container"></div>
+  </body>
+</html>
