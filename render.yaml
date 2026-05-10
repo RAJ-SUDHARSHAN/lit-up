@@ -1,0 +1,32 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# When this file exists at the repo root, Render reads it and provisions
+# (or updates) services automatically on every push. To deploy:
+#
+#   1. Push this repo to GitHub.
+#   2. In Render, "New +" → "Blueprint" → connect the repo.
+#   3. Render reads render.yaml and creates the web service for you.
+#
+# A single Node web service runs everything: the Colyseus WebSocket server
+# *and* the static Svelte client (Express serves client/dist out of the
+# same process — see server/src/index.ts). One URL, one TLS cert, no CORS.
+
+services:
+  - type: web
+    name: lit-up
+    runtime: node
+    plan: free          # Spins down after 15 min idle on free; first
+                        # request after sleep waits ~30s. Bump to "starter"
+                        # ($7/mo) for always-on.
+    region: oregon      # Pick the region closest to most of your players.
+    autoDeploy: true    # Re-deploy on every push to the connected branch.
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: NODE_ENV
+        value: production
+      # PORT is set automatically by Render. Our server reads process.env.PORT
+      # and falls back to 2567 in dev, so we don't pin it here.

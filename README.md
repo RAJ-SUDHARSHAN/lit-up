@@ -71,11 +71,32 @@ lit-up/
 ## Production
 
 ```bash
-npm run build
-npm start
+npm install
+npm run build   # builds shared, server, then client into client/dist/
+npm start       # runs the server, which also serves client/dist on the same port
 ```
 
-Serve the built `client/dist/` from any static host (Vercel, Netlify, Cloudflare Pages)
-and run the server on Railway / Fly.io / Render. Set `VITE_SERVER_URL` at build time
-to point the client at the right websocket.
+In production the Node server (`server/src/index.ts`) serves the built
+Svelte SPA from `client/dist/` at `/`, plus Colyseus matchmaking at
+`/matchmake/*` and the WebSocket upgrade on the same port. One URL, no CORS.
+
+## Deploying to Render
+
+The repo ships with a [`render.yaml`](render.yaml) blueprint, so Render
+sets everything up automatically.
+
+1. Push this repo to GitHub.
+2. In Render → **New +** → **Blueprint** → connect your repo.
+3. Render reads `render.yaml`, runs `npm install && npm run build`, then `npm start`. Your app is live at `https://<service-name>.onrender.com`.
+
+The free plan spins the service down after 15 minutes of inactivity (next
+visitor waits ~30s on cold start). Bump the `plan:` field in `render.yaml`
+to `starter` ($7/mo) for always-on if friends will use the link without
+warning.
+
+### Other hosts
+
+The same `npm install && npm run build && npm start` setup works on Fly.io,
+Railway, Heroku, anywhere that runs a Node web service with WebSocket
+support. The server reads `PORT` from the environment (every host sets it).
 
