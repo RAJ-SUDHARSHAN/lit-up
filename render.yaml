@@ -20,7 +20,10 @@ services:
                         # ($7/mo) for always-on.
     region: oregon      # Pick the region closest to most of your players.
     autoDeploy: true    # Re-deploy on every push to the connected branch.
-    buildCommand: npm install && npm run build
+    # `--include=dev` forces devDependencies to install even with
+    # NODE_ENV=production set at the service level. We need TypeScript and
+    # @types/* during the build; they're not used at runtime.
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /health
     envVars:
