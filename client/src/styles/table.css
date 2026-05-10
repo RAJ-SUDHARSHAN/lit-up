@@ -1,0 +1,413 @@
+/* The game arena: green felt, oval seating, scoreboard centered. The hand
+   strip lives at the bottom; everything else is overlays. There is no
+   right sidebar in the new layout — actions are contextual popovers. */
+
+.game-shell {
+  display: flex;
+  flex-direction: column;
+  height: calc(100svh - var(--header-h));
+  overflow: hidden;
+}
+
+/* ── Arena (full width) ──────────────────────────────── */
+.game-arena {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 38%, #112911 0%, #0a1e0a 100%);
+}
+
+/* ── Felt ────────────────────────────────────────────── */
+/*
+ * Aspect-ratio + min() of width and height keeps the felt as close to a
+ * true circle as the viewport permits. On wide screens the diameter is
+ * height-bound; on narrow screens it's width-bound. This reads as round
+ * on both desktop and mobile.
+ */
+.felt {
+  position: absolute;
+  /* width/height in matching percent units make the felt as round as the
+     arena's aspect ratio permits. The arena is calc(100svh - header) tall
+     and the full viewport wide, so on most screens it's near-square and
+     the felt reads as circular. */
+  width: 70%;
+  height: 70%;
+  top: 48%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(ellipse at 50% 38%, var(--felt-center), var(--felt-edge));
+  border-radius: 50%;
+  border: 12px solid var(--felt-rim);
+  box-shadow:
+    0 0 0 16px var(--rail),
+    0 0 0 18px rgba(0, 0, 0, 0.6),
+    inset 0 0 80px rgba(0, 0, 0, 0.4);
+  z-index: 1;
+}
+.felt-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* Game-over banner shown over the felt center */
+.felt-over-banner {
+  position: absolute;
+  top: 28%;
+  left: 50%;
+  transform: translate(-50%, 0);
+  z-index: 4;
+  text-align: center;
+  pointer-events: none;
+}
+.felt-over-banner .winner {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--gold);
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+}
+.felt-over-banner .sub {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* ── Seats ───────────────────────────────────────────── */
+.seats {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.seat {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: auto;
+  transition: transform 0.3s var(--ease-out);
+}
+.seat-bubble {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(8px);
+  border: 1.5px solid var(--panel-border);
+  border-radius: 16px;
+  padding: 12px 16px 14px;
+  min-width: 130px;
+  transition:
+    border-color 0.22s var(--ease-out),
+    background 0.22s var(--ease-out),
+    box-shadow 0.22s var(--ease-out),
+    transform 0.18s var(--ease-out);
+}
+.seat.opponent .seat-bubble { cursor: pointer; }
+.seat.opponent .seat-bubble:hover {
+  border-color: var(--team-b);
+  background: rgba(251, 146, 60, 0.08);
+  transform: scale(1.05);
+}
+.seat.current-turn .seat-bubble {
+  border-color: var(--gold);
+  background: rgba(251, 191, 36, 0.08);
+  box-shadow: var(--glow-gold), 0 0 0 1px rgba(251, 191, 36, 0.3);
+  animation: seat-glow 1.7s ease-in-out infinite;
+}
+@keyframes seat-glow {
+  0%, 100% { box-shadow: 0 0 16px rgba(251, 191, 36, 0.18), 0 0 0 1px rgba(251, 191, 36, 0.32); }
+  50%      { box-shadow: 0 0 36px rgba(251, 191, 36, 0.42), 0 0 0 2px rgba(251, 191, 36, 0.55); }
+}
+.seat.targeted .seat-bubble {
+  border-color: var(--accent);
+  background: rgba(52, 211, 153, 0.1);
+  box-shadow: var(--glow-accent);
+}
+.seat.disconnected .seat-bubble {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+.seat-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.seat-name {
+  font-size: 0.86rem;
+  font-weight: 700;
+  white-space: nowrap;
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.seat-notes-btn {
+  font-size: 0.84rem;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 6px;
+  opacity: 0.55;
+  transition: opacity 0.15s var(--ease-out), background 0.15s var(--ease-out);
+}
+.seat-notes-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+}
+.seat-turn-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  animation: seat-badge-fade 0.5s var(--ease-out);
+}
+@keyframes seat-badge-fade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Card-back stack for opponent hands. The container's `width` is set
+   inline by the seat (proportional to the hand size) so the bubble
+   resizes to fit larger stacks. */
+.card-stack {
+  position: relative;
+  height: 50px;
+  display: flex;
+  align-items: flex-end;
+  min-width: 32px;
+  margin-right: 24px; /* room for the count chip on the right */
+  transition: width 0.25s var(--ease-out);
+}
+.card-stack .card-back {
+  position: absolute;
+  bottom: 0;
+  width: 32px;
+  height: 46px;
+  transition: left 0.2s var(--ease-out), transform 0.2s;
+}
+.card-stack-count {
+  position: absolute;
+  right: -26px;
+  bottom: 1px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: rgba(0, 0, 0, 0.65);
+  padding: 1px 6px;
+  border-radius: 4px;
+  min-width: 20px;
+  text-align: center;
+}
+.card-stack-empty {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-style: italic;
+}
+/* Your own seat — compact (the fan represents your cards). No card-stack
+   visible here; just avatar + name + optional Declare button. */
+.seat.you .seat-bubble { padding: 8px 14px 8px; min-width: 110px; gap: 4px; }
+.seat.you .seat-avatar { width: 36px; height: 36px; font-size: 0.92rem; }
+
+.seat-last-ask {
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: var(--card-bg);
+  margin-top: 4px;
+  animation: chip-in 0.3s var(--ease-spring);
+}
+.seat-last-ask.success { border: 1.5px solid var(--accent); }
+.seat-last-ask.fail    { border: 1.5px solid var(--danger); opacity: 0.55; }
+@keyframes chip-in {
+  from { opacity: 0; transform: scale(0.6); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.seat-action-btn {
+  margin-top: 6px;
+  padding: 5px 14px;
+  border-radius: 7px;
+  background: rgba(52, 211, 153, 0.18);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  transition: background 0.15s, transform 0.12s;
+}
+.seat-action-btn:hover {
+  background: rgba(52, 211, 153, 0.35);
+  transform: translateY(-2px);
+}
+.seat-action-btn.declare {
+  background: rgba(251, 191, 36, 0.18);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.seat-action-btn.declare:hover {
+  background: rgba(251, 191, 36, 0.35);
+}
+
+/* Bot pending-ask thought bubble — sits above the bot's seat */
+.seat-thought {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(8, 18, 12, 0.96);
+  border: 1.5px solid var(--gold);
+  border-radius: 12px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(251, 191, 36, 0.3);
+  white-space: nowrap;
+  z-index: 4;
+  animation: thought-in 0.32s var(--ease-spring);
+}
+.seat-thought::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--gold);
+}
+@keyframes thought-in {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+.seat-thought-text {
+  font-size: 0.74rem;
+  color: var(--gold);
+  font-weight: 600;
+}
+.seat-thought-card {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 44px;
+  border-radius: 5px;
+  background: var(--card-bg);
+  border: 1.5px solid var(--card-border);
+  font-weight: 800;
+  font-size: 0.78rem;
+  flex-shrink: 0;
+}
+.seat-thought-card.red   { color: var(--card-red); }
+.seat-thought-card.black { color: var(--card-black); }
+
+.seat.pending-asker .seat-bubble {
+  border-color: var(--gold);
+  background: rgba(251, 191, 36, 0.12);
+  animation: seat-glow 0.8s ease-in-out infinite;
+}
+.seat.pending-target .seat-bubble {
+  border-color: var(--danger);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+/* ── Lobby player grid ───────────────────────────────── */
+.player-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+.player-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--panel-border);
+  border-left: 3px solid var(--team-a);
+  border-radius: 10px;
+  padding: 11px 12px;
+  transition: background 0.18s, border-color 0.18s;
+  animation: chip-in 0.3s var(--ease-spring);
+}
+.player-card.team-b { border-left-color: var(--team-b); }
+.player-card .player-meta {
+  flex: 1;
+  min-width: 0;
+}
+.player-card .player-meta strong {
+  display: block;
+  font-size: 0.92rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.player-card .player-meta span {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* ── Rules panel ─────────────────────────────────────── */
+.rules-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(380px, 92vw);
+  height: 100vh;
+  background: rgba(6, 14, 8, 0.97);
+  backdrop-filter: blur(20px);
+  border-left: 1px solid var(--panel-border);
+  box-shadow: -16px 0 50px rgba(0, 0, 0, 0.7);
+  padding: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  z-index: 200;
+  overflow-y: auto;
+}
+.rules-panel header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.rules-panel header h3 { margin: 0; color: var(--gold); }
+.rules-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  display: grid;
+  gap: 9px;
+  line-height: 1.6;
+}
+.rules-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 199;
+}
+
+/* ── Mobile ──────────────────────────────────────────── */
+@media (max-width: 760px) {
+  .felt { width: 88%; height: 56%; }
+  .seat-bubble { min-width: 86px; padding: 8px 10px; }
+  .seat-name { font-size: 0.74rem; max-width: 90px; }
+  .seat-avatar { width: 32px; height: 32px; font-size: 0.85rem; }
+  .card-stack { height: 44px; min-width: 44px; }
+  .card-stack .card-back { width: 26px; height: 38px; }
+  .felt-scoreboard { min-width: 0; padding: 8px 10px; gap: 8px; }
+  .felt-score-num { font-size: 1.6rem; }
+  .felt-score-chip { font-size: 0.6rem; padding: 1px 5px; }
+}

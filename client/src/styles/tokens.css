@@ -1,0 +1,65 @@
+/* Design tokens. Single source of truth for color, spacing, motion. */
+
+:root {
+  /* Surfaces */
+  --bg-deep:        #060d09;
+  --bg:             #0b1a0e;
+  --felt-center:    #1c5c30;
+  --felt-edge:      #0d3b1c;
+  --felt-rim:       #08280f;
+  --rail:           #3d1e08;
+  --panel:          rgba(8, 18, 12, 0.78);
+  --panel-soft:     rgba(255, 255, 255, 0.04);
+  --panel-border:   rgba(255, 255, 255, 0.10);
+
+  /* Text */
+  --text:           #ecf3ed;
+  --text-soft:      #b9c8be;
+  --muted:          #6b8f6b;
+
+  /* Brand & status */
+  --accent:         #34d399;
+  --accent-dark:    #10b981;
+  --gold:           #fbbf24;
+  --gold-dark:      #d97706;
+  --danger:         #f87171;
+  --info:           #60a5fa;
+
+  /* Teams are intentionally monochrome — black and white. This keeps
+     the team identity readable independent of each player's chosen
+     avatar color (which is already a saturated hue from the palette).
+     The black ring needs a thin inner separator on the dark felt so
+     it doesn't disappear; that's applied in the Avatar component. */
+  --team-a:         #f1f5f9;
+  --team-b:         #1c1917;
+  /* Soft accent for team labels in scoreboards and pills, where pure
+     black would be unreadable on the dark surface. */
+  --team-a-text:    #f8fafc;
+  --team-b-text:    #94a3b8;
+
+  /* Cards */
+  --card-bg:        #fffef7;
+  --card-bg-2:      #fef3c7;
+  --card-red:       #dc2626;
+  --card-black:     #111;
+  --card-border:    #d1d5db;
+  --card-shadow:    2px 4px 14px rgba(0, 0, 0, 0.42);
+
+  /* Geometry */
+  --radius:         14px;
+  --radius-sm:      8px;
+  --radius-pill:    999px;
+  --header-h:       56px;
+
+  /* Motion */
+  --ease-out:       cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring:    cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-in-out:    cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* Shadows */
+  --shadow-soft:    0 4px 20px rgba(0, 0, 0, 0.35);
+  --shadow:         0 8px 32px rgba(0, 0, 0, 0.55);
+  --shadow-strong:  0 16px 50px rgba(0, 0, 0, 0.7);
+  --glow-gold:      0 0 24px rgba(251, 191, 36, 0.35);
+  --glow-accent:    0 0 24px rgba(52, 211, 153, 0.35);
+}

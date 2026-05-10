@@ -79,7 +79,3 @@ Serve the built `client/dist/` from any static host (Vercel, Netlify, Cloudflare
 and run the server on Railway / Fly.io / Render. Set `VITE_SERVER_URL` at build time
 to point the client at the right websocket.
 
-## Legacy
-
-The original single-file vanilla-JS implementation is preserved under [`legacy/`](legacy/)
-for reference.
