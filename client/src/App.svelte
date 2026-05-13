@@ -16,9 +16,11 @@
     document.body.classList.toggle("in-game", game.view === "game");
   });
 
-  onMount(() => {
+  onMount(async () => {
     const code = new URL(window.location.href).searchParams.get("room");
     if (code) prefilledCode = code.toUpperCase();
+    // Silently restore session if the user refreshed mid-game.
+    await game.tryAutoReconnect();
   });
 
   function leave() {

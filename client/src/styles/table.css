@@ -7,6 +7,11 @@
   flex-direction: column;
   height: calc(100svh - var(--header-h));
   overflow: hidden;
+  transition: margin-right 0.3s var(--ease-spring);
+}
+
+.game-shell.sidebar-open {
+  margin-right: 380px;
 }
 
 /* ── Arena (full width) ──────────────────────────────── */

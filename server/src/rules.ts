@@ -166,6 +166,7 @@ export function startGame(state: GameState, hands: HandStore, txLog: Transaction
   state.pendingBotAsk.assign({ askerId: "", targetId: "", card: "" });
   state.lastDeclare.assign({ declarerId: "", setKey: "", winningTeam: "", success: false, at: 0 });
   state.lastDeclare.sources.clear();
+  state.postDeclareId = "";
 
   const ids = [...state.players.keys()];
   ids.forEach((id) => hands.set(id, []));
@@ -198,6 +199,7 @@ export function resetToLobby(state: GameState, hands: HandStore, txLog: Transact
   state.pendingBotAsk.assign({ askerId: "", targetId: "", card: "" });
   state.lastDeclare.assign({ declarerId: "", setKey: "", winningTeam: "", success: false, at: 0 });
   state.lastDeclare.sources.clear();
+  state.postDeclareId = "";
 
   // Drop disconnected non-host players.
   const toDrop: string[] = [];
@@ -232,6 +234,7 @@ export function applyAsk(
 ): string | null {
   if (state.status !== "playing") return "Game not started.";
   if (state.turnId !== askerId) return "Not your turn.";
+  state.postDeclareId = "";
   const asker = state.players.get(askerId);
   const target = state.players.get(toPlayerId);
   if (!asker || !target) return "Player not found.";
@@ -302,6 +305,12 @@ export function applyDeclare(
   if (!set) return "Unknown set.";
   if (isSetClaimed(state, setKey)) return "Set already claimed.";
 
+  // Ensure declaring team holds at least one card from the set.
+  const teamHasBaseCard = [...state.players.values()]
+    .filter((p) => p.team === declarer.team)
+    .some((p) => (hands.get(p.id) ?? []).some((c) => set.cards.includes(c)));
+  if (!teamHasBaseCard) return "Your team must hold at least one card from this set.";
+
   const teammateIds = new Set(
     [...state.players.values()].filter((p) => p.team === declarer.team).map((p) => p.id),
   );
@@ -357,18 +366,22 @@ export function applyDeclare(
     `${declarer.name} ${verb} ${set.label} — Team ${winningTeam} scores.`,
   );
 
-  if (
-    state.scoreA >= 5 ||
-    state.scoreB >= 5 ||
-    totalClaimed(state) >= SET_DEFS.length
-  ) {
+  if (totalClaimed(state) >= SET_DEFS.length) {
     state.status = "ended";
     state.winnerTeam = state.scoreA > state.scoreB ? "A" : state.scoreB > state.scoreA ? "B" : "";
     pushAction(state, state.winnerTeam ? `Team ${state.winnerTeam} wins!` : "Game tied.");
     return null;
   }
 
-  ensureValidTurn(state, hands);
+  if (allCorrect) {
+    // Successful declare: keep turn on declarer so they can choose who goes next.
+    state.postDeclareId = declarerId;
+    // Don't call ensureValidTurn — declarer holds the turn to pass or continue.
+  } else {
+    // Failed declare: turn advances normally.
+    state.postDeclareId = "";
+    ensureValidTurn(state, hands);
+  }
   return null;
 }
 
@@ -380,27 +393,27 @@ export function applyPass(
 ): string | null {
   if (state.status !== "playing") return "Game not started.";
   if (state.turnId !== passerId) return "Not your turn.";
+  if (state.postDeclareId !== passerId) return "Can only pass after declaring a set.";
   const passer = state.players.get(passerId);
   if (!passer) return "Player not found.";
-  if ((hands.get(passerId) ?? []).length > 0) return "Can only pass when empty-handed.";
 
   let nextId = toPlayerId;
   if (nextId) {
     const target = state.players.get(nextId);
-    const targetHand = hands.get(nextId) ?? [];
     if (
       !target ||
       target.team !== passer.team ||
       target.id === passer.id ||
-      targetHand.length === 0
+      (hands.get(nextId) ?? []).length === 0
     ) {
       return "Cannot pass to that player.";
     }
   } else {
     nextId = findNextPlayerWithCards(state, hands, passerId, passer.team) ?? undefined;
   }
-  if (!nextId) return "No teammate has cards.";
+  if (!nextId) return "No valid teammate to pass to.";
 
+  state.postDeclareId = "";
   state.turnId = nextId;
   const target = state.players.get(nextId)!;
   pushAction(state, `${passer.name} passed to ${target.name}.`);

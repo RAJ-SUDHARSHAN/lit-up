@@ -110,7 +110,8 @@ export function cardLabel(card: Card): string {
   if (card === "JR") return "Red Joker";
   if (card === "JB") return "Black Joker";
   const suit = SUITS.find((s) => s.key === card[0]);
-  return `${suit?.name ?? "?"} ${card.slice(1)}`;
+  const rank = card.slice(1);
+  return `${rank} of ${suit?.name ?? "?"}`;
 }
 
 export function cardShort(card: Card): { rank: string; symbol: string; red: boolean } {

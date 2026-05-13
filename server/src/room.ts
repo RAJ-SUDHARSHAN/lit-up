@@ -40,12 +40,42 @@ import {
 import { buildBotDeclareAssignments, decideBotAction } from "./bot.js";
 
 const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const RECONNECT_GRACE_S = 60;
+const RECONNECT_GRACE_S = 300; // 5 minutes
+
+// Single-word movie-inspired bot names
+const BOT_NAMES = [
+  "Maverick",
+  "Zephyr",
+  "Falcon",
+  "Matrix",
+  "Blade",
+  "Tron",
+  "Ghost",
+  "Riddick",
+  "Morpheus",
+  "Trinity",
+  "Maximus",
+  "Gandalf",
+  "Dredd",
+  "Ripley",
+  "Groot",
+  "Yoda",
+] as const;
 
 function generateRoomCode(): string {
   return Array.from({ length: 6 }, () =>
     ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)],
   ).join("");
+}
+
+function getNextBotName(state: GameState): string {
+  // Count existing bots
+  let botCount = 0;
+  state.players.forEach((p) => {
+    if (p.isBot) botCount++;
+  });
+  // Cycle through bot names
+  return BOT_NAMES[botCount % BOT_NAMES.length];
 }
 
 export class LiteratureRoom extends Room<GameState> {
@@ -62,6 +92,12 @@ export class LiteratureRoom extends Room<GameState> {
 
   /** Player ids → reconnection tokens (sessionId from Colyseus). */
   private sessionIdToPlayerId = new Map<string, string>();
+
+  /** Tracks which bot replaced a disconnected player: playerId -> botId. */
+  private disconnectedReplacements = new Map<string, string>();
+
+  /** Reconnection timeouts per player: playerId -> timeoutHandle. */
+  private reconnectTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
   private botTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -91,8 +127,41 @@ export class LiteratureRoom extends Room<GameState> {
   override onJoin(client: Client, options: JoinOptions): void {
     const name = (options?.name ?? "").trim();
     if (!name) throw new Error("Name required.");
-    if (this.state.status !== "lobby") throw new Error("Room is not accepting players.");
+    if (!this.state.status.match(/^(lobby|playing)$/)) throw new Error("Room is not accepting players.");
     if (this.state.players.size >= MAX_PLAYERS) throw new Error("Room is full.");
+
+    // ── Reconnect: restore a disconnected player ─────────────────
+    if (options.reconnectToken && this.state.status === "playing") {
+      const existingPlayer = this.state.players.get(options.reconnectToken);
+      if (existingPlayer && !existingPlayer.connected && existingPlayer.name === name) {
+        // Restore the disconnected player
+        const playerId = options.reconnectToken;
+        existingPlayer.connected = true;
+        this.sessionIdToPlayerId.set(client.sessionId, playerId);
+
+        // Remove the bot that replaced them
+        const botId = this.disconnectedReplacements.get(playerId);
+        if (botId) {
+          this.removePlayer(botId);
+          this.disconnectedReplacements.delete(playerId);
+        }
+
+        // Clear the reconnect timeout
+        const timeout = this.reconnectTimeouts.get(playerId);
+        if (timeout) {
+          clearTimeout(timeout);
+          this.reconnectTimeouts.delete(playerId);
+        }
+
+        pushAction(this.state, `${name} reconnected.`);
+        client.send("welcome", { playerId, roomCode: this.state.code });
+        this.sendHand(client);
+        return;
+      }
+    }
+
+    // ── New join ─────────────────────────────────────────────────
+    if (this.state.status !== "lobby") throw new Error("Room is not accepting new players during a game.");
     if (
       [...this.state.players.values()].some(
         (p) => p.name.toLowerCase() === name.toLowerCase(),
@@ -142,27 +211,53 @@ export class LiteratureRoom extends Room<GameState> {
       return;
     }
 
-    // Mid-game: keep the seat warm for a reconnect.
+    // Mid-game: mark disconnected, spawn a bot to take their place, and allow reconnect for 5 min.
     player.connected = false;
-    pushAction(this.state, `${player.name} disconnected.`);
+    pushAction(this.state, `${player.name} disconnected. A bot is taking over.`);
+
+    // Spawn a bot to replace the disconnected player
+    const botId = `bot-${Math.random().toString(36).slice(2, 9)}`;
+    const bot = new Player();
+    bot.id = botId;
+    bot.name = `${player.name} (Bot)`;
+    bot.avatar = player.avatar;
+    bot.character = player.character;
+    bot.team = player.team;
+    bot.isBot = true;
+    bot.isHost = false;
+    bot.connected = true;
+    bot.cardCount = player.cardCount;
+
+    this.state.players.set(botId, bot);
+    this.hands.set(botId, [...this.hands.get(playerId) ?? []]);
+    this.disconnectedReplacements.set(playerId, botId);
+
     ensureValidTurn(this.state, this.hands);
+
+    // Set a 5-minute reconnect window
+    const timeout = setTimeout(() => {
+      const still = this.state.players.get(playerId);
+      if (still && !still.connected) {
+        this.removePlayer(playerId);
+        this.disconnectedReplacements.delete(playerId);
+        this.reconnectTimeouts.delete(playerId);
+        pushAction(this.state, `${player.name} did not reconnect in time.`);
+        ensureValidTurn(this.state, this.hands);
+      }
+    }, RECONNECT_GRACE_S * 1000);
+
+    this.reconnectTimeouts.set(playerId, timeout);
 
     try {
       await this.allowReconnection(client, RECONNECT_GRACE_S);
-      player.connected = true;
-      pushAction(this.state, `${player.name} reconnected.`);
-      this.sendHand(client);
     } catch {
-      // Reconnect window expired — drop them but keep the game playable.
-      this.removePlayer(playerId);
-      pushAction(this.state, `${player.name} did not reconnect.`);
-      this.maybePromoteHost();
-      ensureValidTurn(this.state, this.hands);
+      // Timeout was already handled above, so nothing to do here.
     }
   }
 
   override onDispose(): void {
     if (this.botTimer) clearTimeout(this.botTimer);
+    this.reconnectTimeouts.forEach((timeout) => clearTimeout(timeout));
   }
 
   private removePlayer(playerId: string): void {
@@ -303,10 +398,9 @@ export class LiteratureRoom extends Room<GameState> {
     for (let i = 0; i < toAdd; i++) {
       if (this.state.players.size >= MAX_PLAYERS) break;
       const id = `bot-${Math.random().toString(36).slice(2, 9)}`;
-      const num = nextBotNumber(this.state);
       const bot = new Player();
       bot.id = id;
-      bot.name = `Bot ${num}`;
+      bot.name = getNextBotName(this.state);
       bot.avatar = pickFreeAvatar(this.state);
       bot.character = AVATAR_CHARACTERS[
         Math.floor(Math.random() * AVATAR_CHARACTERS.length)
@@ -441,15 +535,26 @@ export class LiteratureRoom extends Room<GameState> {
     if (action.type === "declare") {
       const assignments = buildBotDeclareAssignments(this.state, this.hands, bot, action.setKey);
       if (assignments) {
-        applyDeclare(this.state, this.hands, bot.id, action.setKey, assignments);
-        this.pushAllHands();
+        const err = applyDeclare(this.state, this.hands, bot.id, action.setKey, assignments);
+        if (!err) {
+          this.pushAllHands();
+          // After a successful declare, bot holds postDeclareId.
+          // If it has no cards left, pass to the next teammate immediately.
+          if ((this.hands.get(bot.id) ?? []).length === 0) {
+            applyPass(this.state, this.hands, bot.id);
+          }
+          // Otherwise, let the bot continue on its turn (scheduleBot below).
+        }
+      } else {
+        // Bot's knowledge was stale — skip and advance turn to avoid infinite loop.
+        ensureValidTurn(this.state, this.hands);
       }
       this.scheduleBot();
       return;
     }
 
-    // Pass.
-    applyPass(this.state, this.hands, bot.id);
+    // Pass (empty-handed) — advance turn without requiring postDeclareId.
+    ensureValidTurn(this.state, this.hands);
     this.scheduleBot();
   }
 }

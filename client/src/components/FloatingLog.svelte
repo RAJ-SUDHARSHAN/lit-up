@@ -6,9 +6,11 @@
 
   interface Props {
     room: RoomSnapshot;
+    /** Pixels from right edge. Increase when sidebar is open. */
+    rightOffset?: number;
   }
 
-  let { room }: Props = $props();
+  let { room, rightOffset = 18 }: Props = $props();
 
   let open = $state(false);
   let unread = $state(0);
@@ -49,7 +51,7 @@
 </script>
 
 {#if open}
-  <div class="log-panel" role="region" aria-label="Action log" transition:fly={{ y: 16, duration: 200 }}>
+  <div class="log-panel" role="region" aria-label="Action log" style="right: {rightOffset}px" transition:fly={{ y: 16, duration: 200 }}>
     <header class="log-panel-header">
       <span>Action log</span>
       <button class="log-close" onclick={toggle} aria-label="Close log">×</button>
@@ -78,6 +80,7 @@
 <button
   class="log-toggle"
   class:active={open}
+  style="right: {rightOffset}px"
   onclick={toggle}
   aria-expanded={open}
   aria-label="Toggle action log"
@@ -94,7 +97,7 @@
     position: fixed;
     right: 18px;
     bottom: 18px;
-    z-index: 320;
+    z-index: 350;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -142,7 +145,7 @@
     position: fixed;
     right: 18px;
     bottom: 70px;
-    z-index: 320;
+    z-index: 350;
     width: min(360px, calc(100vw - 36px));
     max-height: 60vh;
     background: rgba(8, 18, 12, 0.96);

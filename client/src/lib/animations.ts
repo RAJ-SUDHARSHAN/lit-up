@@ -40,7 +40,7 @@ export function flyCard(opts: CardFlightOpts): Promise<void> {
   const layer = ensureLayer();
   const from = rectOf(opts.from);
   const to = rectOf(opts.to);
-  const dur = opts.duration ?? 1.7;
+  const dur = opts.duration ?? 2.4; // Increased from 1.7s for slower, more visible animation
 
   const el = document.createElement("div");
   el.className = "flying-card" + (opts.card ? " face" : " back");
@@ -72,16 +72,11 @@ export function flyCard(opts: CardFlightOpts): Promise<void> {
   });
   layer.appendChild(el);
 
-  // Time budget within `dur`:
-  //   - popIn:   0.32s  — card flips into view at source so eyes can lock on
-  //   - linger:  0.22s  — pause at source before launch
-  //   - travel:  the rest, with most of the duration here
-  //   - settle:  last 0.18s holds at the destination (opacity stays high) so the
-  //              landing registers, then fades quickly.
-  const popIn = 0.32;
-  const linger = 0.22;
-  const fadeTail = 0.18;
-  const travel = Math.max(dur - popIn - linger - fadeTail, 0.5);
+  // Single continuous animation: pop → fly → land
+  // No delays, pure physical movement across the screen
+  const popIn = 0.25;
+  const fly = dur - popIn - 0.25;
+  const land = 0.25;
 
   return new Promise<void>((resolve) => {
     const finish = () => {
@@ -89,51 +84,42 @@ export function flyCard(opts: CardFlightOpts): Promise<void> {
       resolve();
     };
 
-    // Phase 1: pop into existence at source. Slower than before so the brain
-    // notices the card before it starts moving.
-    animate(
+    // Phase 1: Pop in at source (quick appearance)
+    const popCtrl = animate(
       el,
       {
         opacity: [0, 1],
-        x: [startX, startX],
-        y: [startY, startY],
-        scale: [0.5, 1.18],
-        rotate: [-10, -3],
+        scale: [0.6, 1.1],
+        rotate: [-10, -2],
       },
       { duration: popIn, ease: "easeOut" },
     );
 
-    // Phase 2: travel — long, slow arc. Easing is gentle in/out so the card
-    // visibly accelerates and decelerates.
-    setTimeout(() => {
-      animate(
+    // Phase 2: Immediately start flying to destination (smooth, visible motion)
+    Promise.resolve(popCtrl).then(() => {
+      const flyCtrl = animate(
         el,
         {
           x: [startX, endX],
           y: [startY, endY],
-          scale: [1.18, 1.0],
-          rotate: [-3, 4],
+          scale: [1.1, 0.95],
+          rotate: [-2, 6],
         },
         {
-          duration: travel,
-          ease: [0.45, 0.05, 0.35, 1],
+          duration: fly,
+          ease: [0.25, 0.46, 0.45, 0.94], // Smooth easing for natural motion
         },
       );
-    }, (popIn + linger) * 1000);
 
-    // Phase 3: hold at destination, then fade. Motion's controls are
-    // thenable, so we use them as a Promise without going through .finished.
-    setTimeout(
-      () => {
-        const controls = animate(
+      // Phase 3: Land and fade (no delays - immediate)
+      Promise.resolve(flyCtrl).then(() => {
+        animate(
           el,
-          { opacity: [1, 0], scale: [1.0, 0.78] },
-          { duration: fadeTail, ease: "easeIn" },
-        );
-        Promise.resolve(controls).then(finish, finish);
-      },
-      (popIn + linger + travel) * 1000,
-    );
+          { opacity: [1, 0], scale: [0.95, 0.8] },
+          { duration: land, ease: "easeIn" },
+        ).then(finish, finish);
+      });
+    });
   });
 }
 

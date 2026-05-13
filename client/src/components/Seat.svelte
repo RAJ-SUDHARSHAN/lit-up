@@ -49,7 +49,8 @@
   let canPassHere  = $derived(
     room.status === "playing" &&
       isYourTurn &&
-      yourHandSize === 0 &&
+      !!room.postDeclareId &&
+      room.postDeclareId === you?.id &&
       !!you &&
       player.team === you.team &&
       player.id !== you.id &&

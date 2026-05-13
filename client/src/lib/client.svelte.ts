@@ -64,6 +64,7 @@ export interface RoomSnapshot {
   status: GameStatus;
   hostId: string;
   turnId: string;
+  postDeclareId: string;
   players: PlayerSnapshot[];
   claimedA: SetKey[];
   claimedB: SetKey[];
@@ -101,11 +102,28 @@ function inferServerUrl(): string {
   return `${proto}//${window.location.host}`;
 }
 
+// ── Session storage ──────────────────────────────────────────
+
+const SESSION_KEY = "lit-up-session";
+
+interface StoredSession {
+  roomCode: string;
+  playerId: string;
+  name: string;
+  avatar: string;
+  character: string;
+}
+
 // ── Class with reactive fields ───────────────────────────────
 
 class GameClient {
   private client = new Client(inferServerUrl());
   private room: Room | null = null;
+
+  // Pending session data captured at join time, saved once welcome arrives.
+  private _pendingName = "";
+  private _pendingAvatar = "";
+  private _pendingCharacter = "";
 
   // Connection
   status = $state<"idle" | "connecting" | "connected" | "error">("idle");
@@ -124,6 +142,57 @@ class GameClient {
   toasts = $state<Toast[]>([]);
   private toastSeq = 0;
 
+  // Sidebar is now the primary UI (no toggle needed)
+
+  // ── Lifecycle ────────────────────────────────────────────
+
+  // ── Session persistence ──────────────────────────────────
+
+  private saveSession(): void {
+    try {
+      const s: StoredSession = {
+        roomCode: this.roomCode,
+        playerId: this.playerId,
+        name: this._pendingName,
+        avatar: this._pendingAvatar,
+        character: this._pendingCharacter,
+      };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+    } catch { /* storage unavailable */ }
+  }
+
+  private clearSession(): void {
+    try { localStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
+  }
+
+  /** Called on app mount — silently reconnects if a saved session exists. */
+  async tryAutoReconnect(): Promise<void> {
+    let s: StoredSession | null = null;
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (raw) s = JSON.parse(raw) as StoredSession;
+    } catch { /* corrupt data */ }
+    if (!s?.roomCode || !s?.playerId || !s?.name) return;
+
+    this._pendingName = s.name;
+    this._pendingAvatar = s.avatar;
+    this._pendingCharacter = s.character;
+    this.status = "connecting";
+    try {
+      const room = await this.client.joinById<unknown>(s.roomCode, {
+        name: s.name,
+        avatar: s.avatar,
+        character: s.character,
+        reconnectToken: s.playerId,
+      } satisfies JoinOptions);
+      this.bindRoom(room);
+    } catch {
+      // Room gone or session expired — wipe and stay on landing.
+      this.clearSession();
+      this.status = "idle";
+    }
+  }
+
   // ── Lifecycle ────────────────────────────────────────────
 
   async createRoom(name: string, avatar: string, character = ""): Promise<void> {
@@ -131,6 +200,9 @@ class GameClient {
       this.errorBanner = "Enter a name to host.";
       return;
     }
+    this._pendingName = name.trim();
+    this._pendingAvatar = avatar;
+    this._pendingCharacter = character;
     this.errorBanner = "";
     this.status = "connecting";
     try {
@@ -157,6 +229,9 @@ class GameClient {
       this.errorBanner = "Enter a room code.";
       return;
     }
+    this._pendingName = trimmedName;
+    this._pendingAvatar = avatar;
+    this._pendingCharacter = character;
     this.errorBanner = "";
     this.status = "connecting";
     try {
@@ -173,6 +248,7 @@ class GameClient {
   }
 
   leave(): void {
+    this.clearSession();
     this.room?.leave(true);
     this.room = null;
     this.room$ = null;
@@ -266,6 +342,7 @@ class GameClient {
       this.playerId = msg.playerId;
       this.roomCode = msg.roomCode;
       this.status = "connected";
+      this.saveSession();
     });
 
     room.onMessage("hand", (msg: { hand: Card[] }) => {
@@ -277,6 +354,9 @@ class GameClient {
     });
 
     room.onLeave(() => {
+      // Only wipe session if the game has ended — a mid-game disconnect
+      // should let the user refresh to reconnect.
+      if (this.room$?.status === "ended") this.clearSession();
       this.toast("Disconnected from room.", "warn");
       this.room = null;
       this.room$ = null;
@@ -301,6 +381,7 @@ function snapshotRoom(state: unknown): RoomSnapshot {
     status: GameStatus;
     hostId: string;
     turnId: string;
+    postDeclareId?: string;
     players: { forEach: (cb: (v: PlayerSnapshot, k: string) => void) => void };
     claimedA: SetKey[];
     claimedB: SetKey[];
@@ -345,6 +426,7 @@ function snapshotRoom(state: unknown): RoomSnapshot {
     status: s.status,
     hostId: s.hostId,
     turnId: s.turnId,
+    postDeclareId: s.postDeclareId ?? "",
     players,
     claimedA: [...s.claimedA],
     claimedB: [...s.claimedB],

@@ -68,6 +68,7 @@ export class GameState extends Schema {
   @type("string") status: "lobby" | "playing" | "ended" = "lobby";
   @type("string") hostId: string = "";
   @type("string") turnId: string = "";
+  @type("string") postDeclareId: string = "";
 
   @type({ map: Player }) players = new MapSchema<Player>();
 

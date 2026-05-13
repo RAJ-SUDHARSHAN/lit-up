@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import {
+    cardLabel,
     CARD_TO_SET,
     SET_DEFS,
     type Card,
@@ -13,10 +14,10 @@
   import Hand from "../components/Hand.svelte";
   import Table from "../components/Table.svelte";
   import YouTag from "../components/YouTag.svelte";
-  import PlayerActionPopover from "../components/PlayerActionPopover.svelte";
+  import CardSelectSidebar from "../components/CardSelectSidebar.svelte";
+  import FloatingLog from "../components/FloatingLog.svelte";
   import PlayerNotesPopover from "../components/PlayerNotesPopover.svelte";
   import DeclareModal from "../components/DeclareModal.svelte";
-  import FloatingLog from "../components/FloatingLog.svelte";
 
   let popoverTarget = $state<PlayerSnapshot | null>(null);
   let notesTarget = $state<PlayerSnapshot | null>(null);
@@ -80,7 +81,7 @@
     });
   });
 
-  // ── Brief banner + chime when your turn starts ──────────────────
+  // ── Brief banner + chime when your turn starts; close sidebar on turn loss ─
   $effect(() => {
     const turn = room?.turnId;
     if (!turn || turn === prevTurnId) return;
@@ -89,9 +90,10 @@
       prevTurnId = turn;
       if (turn === game.playerId && room?.status === "playing") {
         game.toast("Your turn!", "info", 1800);
-        // Don't play the "turn" chime on the very first turn after the
-        // deal — the deal sound already covers that beat.
         if (!isFirstTurn) sound.play("turn");
+      } else {
+        // Turn moved away from us — close the sidebar.
+        popoverTarget = null;
       }
     });
   });
@@ -128,6 +130,11 @@
     untrack(() => {
       prevDeclareAt = decl.at;
       animateDeclare(decl);
+      // After a successful declare by us, close the sidebar so the player
+      // sees the full table and the "Pass here" buttons on teammate seats.
+      if (decl.success && decl.declarerId === game.playerId) {
+        popoverTarget = null;
+      }
     });
   });
 
@@ -184,17 +191,26 @@
         : askerSeat;
       flyCard({ from: fromEl, to: toEl, card: ask.card as Card });
     } else {
+      // Show clear "no card" feedback
       shake(askerSeat);
       if (ask.targetId === game.playerId) {
         const handGrid = document.querySelector<HTMLElement>(".hand-grid");
         if (handGrid) shake(handGrid);
+        // Toast when you're asked for a card you don't have
+        game.toast(`You don't have ${cardLabel(ask.card as Card)}.`, "info", 2000);
+      } else {
+        // Toast when opponent doesn't have the card you asked for
+        const target = room?.players.find(p => p.id === ask.targetId);
+        if (target) {
+          game.toast(`${target.name} doesn't have ${cardLabel(ask.card as Card)}.`, "info", 2000);
+        }
       }
     }
   }
 </script>
 
 {#if room}
-  <div class="game-shell">
+  <div class="game-shell" class:sidebar-open={popoverTarget !== null}>
     <Table
       {room}
       {you}
@@ -220,16 +236,15 @@
       <Hand hand={game.hand} {newlyAddedCards} />
     </Table>
 
-    <FloatingLog {room} />
+    <FloatingLog {room} rightOffset={popoverTarget ? 398 : 18} />
 
-    {#if popoverTarget}
-      <PlayerActionPopover
-        target={popoverTarget}
-        {room}
-        hand={game.hand}
-        onClose={() => (popoverTarget = null)}
-      />
-    {/if}
+    <!-- Sidebar is now the primary UI for card selection -->
+    <CardSelectSidebar
+      target={popoverTarget}
+      {room}
+      hand={game.hand}
+      onClose={() => (popoverTarget = null)}
+    />
 
     {#if declareOpen && you}
       <DeclareModal

@@ -35,19 +35,19 @@
 }
 .card .cs {
   position: absolute;
-  font-size: 0.82rem;
+  font-size: 1.05rem;
   line-height: 1;
 }
 .card .cr.tl { top: 7px; left: 8px; }
-.card .cs.tl { top: 25px; left: 9px; }
+.card .cs.tl { top: 27px; left: 7px; }
 .card .cr.br {
   bottom: 7px;
   right: 8px;
   transform: rotate(180deg);
 }
 .card .cs.br {
-  bottom: 25px;
-  right: 9px;
+  bottom: 27px;
+  right: 7px;
   transform: rotate(180deg);
 }
 .card .cc {
@@ -55,7 +55,7 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 2.1rem;
+  font-size: 2.8rem;
   line-height: 1;
 }
 
@@ -152,9 +152,9 @@
   position: absolute;
 }
 .flying-card.face .cr.tl { top: 7px; left: 8px; font-size: 1.15rem; font-weight: 800; line-height: 1; }
-.flying-card.face .cs.tl { top: 25px; left: 9px; font-size: 0.82rem; line-height: 1; }
+.flying-card.face .cs.tl { top: 27px; left: 7px; font-size: 1.05rem; line-height: 1; }
 .flying-card.face .cr.br { bottom: 7px; right: 8px; transform: rotate(180deg); font-size: 1.15rem; font-weight: 800; line-height: 1; }
-.flying-card.face .cs.br { bottom: 25px; right: 9px; transform: rotate(180deg); font-size: 0.82rem; line-height: 1; }
+.flying-card.face .cs.br { bottom: 27px; right: 7px; transform: rotate(180deg); font-size: 1.05rem; line-height: 1; }
 .flying-card.face .cc {
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);

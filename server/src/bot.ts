@@ -74,8 +74,11 @@ function buildContext(
   const opponents = [...state.players.values()].filter(
     (p) => p.team !== bot.team && (hands.get(p.id) ?? []).length > 0,
   );
-  const teamCards = collectTeamCards(state, hands, bot.team);
-  const oppCards = collectTeamCards(state, hands, otherTeam(bot.team));
+  // IMPORTANT: Bots only know about cards through public information (CardKnowledge),
+  // NOT by accessing team's actual hands. This ensures fair play - bots can't cheat
+  // by knowing their teammates' hands before they're revealed.
+  const teamCards = deriveTeamCardsFromKnowledge(ck, myHand, bot.team, txLog, state);
+  const oppCards = new Set<Card>(); // Opponent cards are unknown to the bot
   const claimed = new Set<SetKey>(
     [...state.claimedA, ...state.claimedB].filter(
       (k): k is string => typeof k === "string",
@@ -327,13 +330,32 @@ function scoreAsk(card: Card, confidence: Candidate["confidence"], ctx: BotCtx):
 
 // ── Helpers ────────────────────────────────────────────────────────
 
-function collectTeamCards(state: GameState, hands: HandStore, team: Team): Set<Card> {
-  const cards = new Set<Card>();
-  state.players.forEach((p: Player, id: string) => {
-    if (p.team !== team) return;
-    const h = hands.get(id) ?? [];
-    h.forEach((c) => cards.add(c));
-  });
+/**
+ * Derive team cards from public knowledge only (no peeking at actual hands).
+ * Replays the transaction log: add when a teammate gains a card, remove when
+ * an opponent takes it back. This keeps the set accurate over time.
+ */
+function deriveTeamCardsFromKnowledge(
+  ck: CardKnowledge,
+  myHand: Card[],
+  myTeam: Team,
+  txLog: TransactionLog,
+  state: GameState,
+): Set<Card> {
+  const cards = new Set<Card>(myHand);
+  for (const tx of txLog) {
+    if (!tx.success) continue;
+    if (tx.askerTeam === myTeam) {
+      // Teammate asked and got the card.
+      cards.add(tx.card);
+    } else {
+      // Opponent asked successfully — check if the target was on our team.
+      const target = state.players.get(tx.targetId);
+      if (target?.team === myTeam) {
+        cards.delete(tx.card);
+      }
+    }
+  }
   return cards;
 }
 
