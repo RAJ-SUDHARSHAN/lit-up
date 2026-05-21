@@ -254,10 +254,17 @@ export function applyAsk(
 
   const success = targetHand.includes(card);
 
+  // The asker does NOT hold this card — they asked for it. Recording this
+  // enables elimination-based inference: once every other player is absent,
+  // the remaining one must hold it.
+  recordFailure(ck, card, askerId);
+
   if (success) {
     hands.set(toPlayerId, targetHand.filter((c) => c !== card));
     askerHand.push(card);
-    recordSuccess(ck, card, askerId);
+    // Target no longer holds the card; asker now does.
+    recordFailure(ck, card, toPlayerId);
+    recordSuccess(ck, card, askerId); // sets holder = asker, clears asker from absent
     pushAction(state, `${asker.name} asked ${target.name} for ${cardLabel(card)} — got it.`);
     state.turnId = askerId;
   } else {
@@ -374,9 +381,19 @@ export function applyDeclare(
   }
 
   if (allCorrect) {
-    // Successful declare: keep turn on declarer so they can choose who goes next.
     state.postDeclareId = declarerId;
-    // Don't call ensureValidTurn — declarer holds the turn to pass or continue.
+    // If the declarer has no cards left after the set was stripped, auto-pass
+    // to a teammate with cards (or the next player with cards if no teammate).
+    if ((hands.get(declarerId) ?? []).length === 0) {
+      const teammate = findNextPlayerWithCards(state, hands, declarerId, declarer.team as Team);
+      if (teammate) {
+        state.postDeclareId = "";
+        state.turnId = teammate;
+      } else {
+        state.postDeclareId = "";
+        ensureValidTurn(state, hands);
+      }
+    }
   } else {
     // Failed declare: turn advances normally.
     state.postDeclareId = "";
