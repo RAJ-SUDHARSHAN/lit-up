@@ -1,0 +1,5 @@
+[build]
+buildCommand = "npm run build -w @lit-up/shared && npm run build -w @lit-up/server && npm run build -w @lit-up/client"
+
+[deploy]
+startCommand = "npm run start -w @lit-up/server"
