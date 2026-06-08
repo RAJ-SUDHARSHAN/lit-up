@@ -21,12 +21,13 @@
   let { room, you, hand, onClose }: Props = $props();
 
   let claimed = $derived(new Set<SetKey>([...room.claimedA, ...room.claimedB]));
-  let availableSets = $derived(
-    SET_DEFS.filter(
-      (s) => !claimed.has(s.key) && hand.some((c) => CARD_TO_SET.get(c) === s.key),
-    ),
-  );
   let teammates = $derived(room.players.filter((p) => p.team === you.team));
+  // Only show sets where the declarer personally holds at least one card (base card).
+  // The server enforces this too — keeping UI in sync prevents the confusing case
+  // where you pick a set and immediately get a server rejection.
+  let availableSets = $derived(
+    SET_DEFS.filter((s) => !claimed.has(s.key) && s.cards.some((c) => hand.includes(c)))
+  );
 
   let selectedSet = $state<SetKey>("");
   let assignments = $state<Record<Card, string>>({});

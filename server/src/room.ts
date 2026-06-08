@@ -17,6 +17,7 @@ import {
   type AskCommand,
   type DeclareCommand,
   type JoinOptions,
+  type MovePlayerCommand,
   type PassCommand,
   type SetBotDifficultyCommand,
   type SetRoomConfigCommand,
@@ -123,6 +124,9 @@ export class LiteratureRoom extends Room<GameState> {
     );
     this.onMessage("set_room_config", (client, msg: SetRoomConfigCommand) =>
       this.handleSetRoomConfig(client, msg),
+    );
+    this.onMessage("move_player", (client, msg: MovePlayerCommand) =>
+      this.handleMovePlayer(client, msg),
     );
   }
 
@@ -525,6 +529,26 @@ export class LiteratureRoom extends Room<GameState> {
     }
   }
 
+  private handleMovePlayer(client: Client, msg: MovePlayerCommand): void {
+    if (!this.requireHost(client)) return;
+    if (this.state.status !== "lobby") {
+      this.dispatchError(client, "Teams are locked once the game starts.");
+      return;
+    }
+    const target = this.state.players.get(msg?.playerId);
+    if (!target) {
+      this.dispatchError(client, "Player not found.");
+      return;
+    }
+    if (msg?.team !== "A" && msg?.team !== "B") {
+      this.dispatchError(client, "Invalid team.");
+      return;
+    }
+    if (target.team === msg.team) return; // already on that team, no-op
+    target.team = msg.team;
+    pushAction(this.state, `${target.name} moved to Team ${msg.team}.`);
+  }
+
   // ── Bot scheduler ────────────────────────────────────────
 
   /**
@@ -586,16 +610,35 @@ export class LiteratureRoom extends Room<GameState> {
           }
           // Otherwise, let the bot continue on its turn (scheduleBot below).
         }
+        // Note: if applyDeclare returned an error the state is unchanged; the
+        // forced advance below will move the turn regardless.
       } else {
-        // Bot's knowledge was stale — skip and advance turn to avoid infinite loop.
-        ensureValidTurn(this.state, this.hands);
+        // Bot declared a set it doesn't actually hold — its knowledge was stale
+        // or inferred incorrectly. Force-advance to the next player with cards so
+        // the game cannot wedge on this bot. ensureValidTurn is a no-op when the
+        // bot still holds cards, so we find the next player explicitly.
+        const next = findNextPlayerWithCards(this.state, this.hands, bot.id);
+        if (next) {
+          this.state.turnId = next;
+          pushAction(this.state, `${bot.name} yielded turn (stale declare).`);
+        }
       }
       this.scheduleBot(true);
       return;
     }
 
-    // Pass — bot has no cards left (or all remaining fallbacks exhausted).
-    ensureValidTurn(this.state, this.hands);
+    // Pass — either an intelligent post-declare pass (expert tier) or the bot
+    // has no cards / no viable asks and needs to yield the turn.
+    if (action.type === "pass" && action.toPlayerId && this.state.postDeclareId === bot.id) {
+      // Intelligent post-declare pass to a specific teammate.
+      const err = applyPass(this.state, this.hands, bot.id, action.toPlayerId);
+      if (err) {
+        // Fallback if the targeted pass was rejected (e.g. teammate now empty).
+        applyPass(this.state, this.hands, bot.id);
+      }
+    } else {
+      ensureValidTurn(this.state, this.hands);
+    }
     this.scheduleBot(true);
   }
 }
